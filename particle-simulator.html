@@ -1,0 +1,974 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Particle Flow Simulator</title>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Orbitron:wght@400;700;900&family=Rajdhani:wght@300;400;600&display=swap');
+        
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        body {
+            font-family: 'Rajdhani', sans-serif;
+            background: #0a0a0f;
+            color: #fff;
+            overflow: hidden;
+            cursor: crosshair;
+        }
+        
+        #intro-screen {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: radial-gradient(ellipse at center, #1a1a2e 0%, #0a0a0f 100%);
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            z-index: 1000;
+            transition: opacity 0.8s ease-out;
+        }
+        
+        #intro-screen.hidden {
+            opacity: 0;
+            pointer-events: none;
+        }
+        
+        .intro-title {
+            font-family: 'Orbitron', sans-serif;
+            font-size: 4rem;
+            font-weight: 900;
+            background: linear-gradient(135deg, #00ffff 0%, #ff00ff 50%, #ffff00 100%);
+            -webkit-background-clip: text;
+            background-clip: text;
+            -webkit-text-fill-color: transparent;
+            margin-bottom: 1rem;
+            text-transform: uppercase;
+            letter-spacing: 0.2em;
+            animation: glow 3s ease-in-out infinite;
+        }
+        
+        @keyframes glow {
+            0%, 100% { filter: drop-shadow(0 0 20px rgba(0, 255, 255, 0.5)); }
+            50% { filter: drop-shadow(0 0 40px rgba(255, 0, 255, 0.8)); }
+        }
+        
+        .intro-subtitle {
+            font-size: 1.2rem;
+            color: #888;
+            margin-bottom: 3rem;
+            letter-spacing: 0.1em;
+        }
+        
+        #enable-camera-btn {
+            font-family: 'Orbitron', sans-serif;
+            font-size: 1.2rem;
+            font-weight: 700;
+            padding: 1.5rem 3rem;
+            background: linear-gradient(135deg, #00ffff 0%, #0099ff 100%);
+            border: none;
+            border-radius: 50px;
+            color: #000;
+            cursor: pointer;
+            text-transform: uppercase;
+            letter-spacing: 0.15em;
+            box-shadow: 0 0 30px rgba(0, 255, 255, 0.5);
+            transition: all 0.3s ease;
+            position: relative;
+            overflow: hidden;
+        }
+        
+        #enable-camera-btn:hover {
+            transform: scale(1.05);
+            box-shadow: 0 0 50px rgba(0, 255, 255, 0.8);
+        }
+        
+        #enable-camera-btn:active {
+            transform: scale(0.98);
+        }
+        
+        #enable-camera-btn::before {
+            content: '';
+            position: absolute;
+            top: -50%;
+            left: -50%;
+            width: 200%;
+            height: 200%;
+            background: linear-gradient(45deg, transparent, rgba(255, 255, 255, 0.3), transparent);
+            transform: rotate(45deg);
+            animation: shine 3s ease-in-out infinite;
+        }
+        
+        @keyframes shine {
+            0% { transform: translateX(-100%) translateY(-100%) rotate(45deg); }
+            50% { transform: translateX(100%) translateY(100%) rotate(45deg); }
+            100% { transform: translateX(-100%) translateY(-100%) rotate(45deg); }
+        }
+        
+        #app {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            opacity: 0;
+            transition: opacity 0.5s ease-in;
+        }
+        
+        #app.visible {
+            opacity: 1;
+        }
+        
+        #particle-canvas {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: radial-gradient(ellipse at center, #0f0f1a 0%, #0a0a0f 100%);
+        }
+        
+        #camera-preview {
+            position: absolute;
+            top: 20px;
+            left: 50%;
+            transform: translateX(-50%);
+            width: 256px;
+            height: 144px;
+            border: 2px solid rgba(0, 255, 255, 0.5);
+            border-radius: 8px;
+            overflow: hidden;
+            box-shadow: 0 0 30px rgba(0, 255, 255, 0.3);
+            background: #000;
+        }
+        
+        #camera-video {
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+            transform: scaleX(-1);
+        }
+        
+        #overlay-canvas {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            pointer-events: none;
+        }
+        
+        .controls {
+            position: absolute;
+            top: 20px;
+            left: 20px;
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+            animation: slideIn 0.8s ease-out 0.3s backwards;
+        }
+        
+        @keyframes slideIn {
+            from {
+                opacity: 0;
+                transform: translateX(-30px);
+            }
+            to {
+                opacity: 1;
+                transform: translateX(0);
+            }
+        }
+        
+        .control-btn {
+            font-family: 'Rajdhani', sans-serif;
+            font-size: 0.9rem;
+            font-weight: 600;
+            padding: 0.7rem 1.2rem;
+            background: rgba(0, 255, 255, 0.1);
+            border: 1px solid rgba(0, 255, 255, 0.3);
+            border-radius: 6px;
+            color: #00ffff;
+            cursor: pointer;
+            text-transform: uppercase;
+            letter-spacing: 0.1em;
+            transition: all 0.3s ease;
+            backdrop-filter: blur(10px);
+        }
+        
+        .control-btn:hover {
+            background: rgba(0, 255, 255, 0.2);
+            border-color: rgba(0, 255, 255, 0.6);
+            box-shadow: 0 0 20px rgba(0, 255, 255, 0.3);
+        }
+        
+        .control-btn.active {
+            background: rgba(0, 255, 255, 0.3);
+            border-color: #00ffff;
+            box-shadow: 0 0 25px rgba(0, 255, 255, 0.5);
+        }
+        
+        .keyboard-hints {
+            position: absolute;
+            bottom: 20px;
+            right: 20px;
+            background: rgba(0, 0, 0, 0.6);
+            border: 1px solid rgba(0, 255, 255, 0.2);
+            border-radius: 8px;
+            padding: 1rem;
+            backdrop-filter: blur(10px);
+            animation: slideIn 0.8s ease-out 0.6s backwards;
+        }
+        
+        .keyboard-hints h3 {
+            font-family: 'Orbitron', sans-serif;
+            font-size: 0.9rem;
+            color: #00ffff;
+            margin-bottom: 0.5rem;
+            text-transform: uppercase;
+            letter-spacing: 0.1em;
+        }
+        
+        .hint-item {
+            display: flex;
+            align-items: center;
+            gap: 0.7rem;
+            margin-bottom: 0.4rem;
+            font-size: 0.85rem;
+        }
+        
+        .hint-key {
+            font-family: 'Orbitron', sans-serif;
+            font-weight: 700;
+            background: rgba(255, 255, 255, 0.1);
+            border: 1px solid rgba(255, 255, 255, 0.3);
+            border-radius: 4px;
+            padding: 0.2rem 0.5rem;
+            min-width: 2rem;
+            text-align: center;
+            color: #fff;
+        }
+        
+        .hint-desc {
+            color: #aaa;
+        }
+        
+        .status-indicator {
+            position: absolute;
+            top: 20px;
+            right: 20px;
+            background: rgba(0, 0, 0, 0.6);
+            border: 1px solid rgba(0, 255, 255, 0.2);
+            border-radius: 8px;
+            padding: 1rem 1.5rem;
+            backdrop-filter: blur(10px);
+            animation: slideIn 0.8s ease-out 0.4s backwards;
+            min-width: 200px;
+        }
+        
+        .status-title {
+            font-family: 'Orbitron', sans-serif;
+            font-size: 0.8rem;
+            color: #00ffff;
+            margin-bottom: 0.5rem;
+            text-transform: uppercase;
+            letter-spacing: 0.1em;
+        }
+        
+        .status-text {
+            font-size: 1rem;
+            color: #fff;
+        }
+        
+        .status-dot {
+            display: inline-block;
+            width: 8px;
+            height: 8px;
+            border-radius: 50%;
+            margin-right: 0.5rem;
+            animation: pulse 2s ease-in-out infinite;
+        }
+        
+        .status-dot.loading {
+            background: #ffaa00;
+        }
+        
+        .status-dot.active {
+            background: #00ff00;
+        }
+        
+        .status-dot.waiting {
+            background: #ff00ff;
+        }
+        
+        @keyframes pulse {
+            0%, 100% { opacity: 1; transform: scale(1); }
+            50% { opacity: 0.6; transform: scale(1.2); }
+        }
+        
+        .theme-indicator {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            font-family: 'Orbitron', sans-serif;
+            font-size: 3rem;
+            font-weight: 900;
+            color: #fff;
+            text-transform: uppercase;
+            letter-spacing: 0.2em;
+            opacity: 0;
+            pointer-events: none;
+            text-shadow: 0 0 30px currentColor;
+            transition: opacity 0.3s ease;
+        }
+        
+        .theme-indicator.show {
+            animation: themeShow 1.5s ease-out;
+        }
+        
+        @keyframes themeShow {
+            0% { opacity: 0; transform: translate(-50%, -50%) scale(0.5); }
+            20% { opacity: 1; transform: translate(-50%, -50%) scale(1.2); }
+            80% { opacity: 1; transform: translate(-50%, -50%) scale(1); }
+            100% { opacity: 0; transform: translate(-50%, -50%) scale(1); }
+        }
+    </style>
+</head>
+<body>
+    <div id="intro-screen">
+        <h1 class="intro-title">Particle Flow</h1>
+        <p class="intro-subtitle">Real-time hand and face tracking with particle morphing</p>
+        <button id="enable-camera-btn">Enable Camera</button>
+    </div>
+    
+    <div id="app">
+        <canvas id="particle-canvas"></canvas>
+        
+        <div id="camera-preview">
+            <video id="camera-video" autoplay playsinline></video>
+            <canvas id="overlay-canvas"></canvas>
+        </div>
+        
+        <div class="controls">
+            <button class="control-btn" id="attract-btn">Attract Mode</button>
+            <button class="control-btn" id="repel-btn">Repel Mode</button>
+        </div>
+        
+        <div class="keyboard-hints">
+            <h3>Shortcuts</h3>
+            <div class="hint-item">
+                <span class="hint-key">SPACE</span>
+                <span class="hint-desc">Toggle Mode</span>
+            </div>
+            <div class="hint-item">
+                <span class="hint-key">V</span>
+                <span class="hint-desc">Toggle Camera</span>
+            </div>
+            <div class="hint-item">
+                <span class="hint-key">FIST</span>
+                <span class="hint-desc">Change Theme</span>
+            </div>
+        </div>
+        
+        <div class="status-indicator">
+            <div class="status-title">Status</div>
+            <div class="status-text" id="status-text">
+                <span class="status-dot loading"></span>
+                <span id="status-message">Loading...</span>
+            </div>
+        </div>
+        
+        <div class="theme-indicator" id="theme-indicator"></div>
+    </div>
+    
+    <script src="https://cdn.jsdelivr.net/npm/@mediapipe/camera_utils/camera_utils.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@mediapipe/hands/hands.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@mediapipe/face_mesh/face_mesh.js"></script>
+    
+    <script>
+        // Configuration
+        const CONFIG = {
+            particleCount: 10000,
+            attractForce: 0.15,
+            repelForce: 0.3,
+            friction: 0.92,
+            maxSpeed: 8,
+            trailAlpha: 0.15,
+            handSpreadBase: 3,
+            handSpreadFinger: 1.5,
+            handSpreadPalm: 6,
+            faceSpread: 1.2,
+            goldenRatio: 1.618033988749895
+        };
+        
+        const THEMES = [
+            {
+                name: 'Rainbow',
+                colors: ['#ff0080', '#ff8000', '#ffff00', '#00ff80', '#0080ff', '#8000ff']
+            },
+            {
+                name: 'Fire',
+                colors: ['#ff0000', '#ff4500', '#ff8c00', '#ffd700', '#ffff00', '#ff6347']
+            },
+            {
+                name: 'Ocean',
+                colors: ['#001f3f', '#0074d9', '#7fdbff', '#39cccc', '#3d9970', '#2ecc40']
+            },
+            {
+                name: 'Galaxy',
+                colors: ['#1a0033', '#4a0080', '#8000ff', '#b366ff', '#e6ccff', '#ffffff']
+            },
+            {
+                name: 'Matrix',
+                colors: ['#003300', '#006600', '#009900', '#00cc00', '#00ff00', '#33ff33']
+            }
+        ];
+        
+        let currentTheme = 0;
+        let mode = 'attract'; // 'attract' or 'repel'
+        let cameraVisible = true;
+        
+        // Elements
+        const introScreen = document.getElementById('intro-screen');
+        const enableCameraBtn = document.getElementById('enable-camera-btn');
+        const app = document.getElementById('app');
+        const particleCanvas = document.getElementById('particle-canvas');
+        const particleCtx = particleCanvas.getContext('2d');
+        const cameraVideo = document.getElementById('camera-video');
+        const overlayCanvas = document.getElementById('overlay-canvas');
+        const overlayCtx = overlayCanvas.getContext('2d');
+        const cameraPreview = document.getElementById('camera-preview');
+        const statusMessage = document.getElementById('status-message');
+        const statusDot = document.querySelector('.status-dot');
+        const attractBtn = document.getElementById('attract-btn');
+        const repelBtn = document.getElementById('repel-btn');
+        const themeIndicator = document.getElementById('theme-indicator');
+        
+        // Particle system
+        class Particle {
+            constructor() {
+                this.x = Math.random() * particleCanvas.width;
+                this.y = Math.random() * particleCanvas.height;
+                this.vx = 0;
+                this.vy = 0;
+                this.color = this.getRandomColor();
+                this.size = Math.random() * 2 + 1;
+            }
+            
+            getRandomColor() {
+                const theme = THEMES[currentTheme].colors;
+                return theme[Math.floor(Math.random() * theme.length)];
+            }
+            
+            update(targets) {
+                if (targets.length === 0) {
+                    // Drift randomly when no targets
+                    this.vx += (Math.random() - 0.5) * 0.1;
+                    this.vy += (Math.random() - 0.5) * 0.1;
+                } else {
+                    // Find closest target
+                    let closestDist = Infinity;
+                    let closestTarget = null;
+                    
+                    for (const target of targets) {
+                        const dx = target.x - this.x;
+                        const dy = target.y - this.y;
+                        const dist = Math.sqrt(dx * dx + dy * dy);
+                        
+                        if (dist < closestDist) {
+                            closestDist = dist;
+                            closestTarget = target;
+                        }
+                    }
+                    
+                    if (closestTarget) {
+                        const dx = closestTarget.x - this.x;
+                        const dy = closestTarget.y - this.y;
+                        const dist = Math.sqrt(dx * dx + dy * dy);
+                        
+                        if (dist > 1) {
+                            const force = mode === 'attract' ? CONFIG.attractForce : -CONFIG.repelForce;
+                            const spreadFactor = closestTarget.spread || 1;
+                            const distFactor = 1 / (1 + dist * 0.01);
+                            
+                            this.vx += (dx / dist) * force * distFactor * spreadFactor;
+                            this.vy += (dy / dist) * force * distFactor * spreadFactor;
+                        }
+                    }
+                }
+                
+                // Apply friction
+                this.vx *= CONFIG.friction;
+                this.vy *= CONFIG.friction;
+                
+                // Limit speed
+                const speed = Math.sqrt(this.vx * this.vx + this.vy * this.vy);
+                if (speed > CONFIG.maxSpeed) {
+                    this.vx = (this.vx / speed) * CONFIG.maxSpeed;
+                    this.vy = (this.vy / speed) * CONFIG.maxSpeed;
+                }
+                
+                // Update position
+                this.x += this.vx;
+                this.y += this.vy;
+                
+                // Wrap around screen
+                if (this.x < 0) this.x = particleCanvas.width;
+                if (this.x > particleCanvas.width) this.x = 0;
+                if (this.y < 0) this.y = particleCanvas.height;
+                if (this.y > particleCanvas.height) this.y = 0;
+            }
+            
+            draw() {
+                particleCtx.fillStyle = this.color;
+                particleCtx.beginPath();
+                particleCtx.arc(this.x, this.y, this.size, 0, Math.PI * 2);
+                particleCtx.fill();
+            }
+        }
+        
+        let particles = [];
+        let targets = [];
+        let hands = null;
+        let faceMesh = null;
+        let lastFistState = false;
+        
+        // Initialize particles
+        function initParticles() {
+            particles = [];
+            for (let i = 0; i < CONFIG.particleCount; i++) {
+                particles.push(new Particle());
+            }
+        }
+        
+        // Resize canvas
+        function resizeCanvas() {
+            particleCanvas.width = window.innerWidth;
+            particleCanvas.height = window.innerHeight;
+        }
+        
+        window.addEventListener('resize', resizeCanvas);
+        resizeCanvas();
+        
+        // MediaPipe Hands
+        function initHands() {
+            hands = new Hands({
+                locateFile: (file) => {
+                    return `https://cdn.jsdelivr.net/npm/@mediapipe/hands/${file}`;
+                }
+            });
+            
+            hands.setOptions({
+                maxNumHands: 2,
+                modelComplexity: 1,
+                minDetectionConfidence: 0.7,
+                minTrackingConfidence: 0.5
+            });
+            
+            hands.onResults(onHandsResults);
+        }
+        
+        // MediaPipe Face Mesh
+        function initFaceMesh() {
+            faceMesh = new FaceMesh({
+                locateFile: (file) => {
+                    return `https://cdn.jsdelivr.net/npm/@mediapipe/face_mesh/${file}`;
+                }
+            });
+            
+            faceMesh.setOptions({
+                maxNumFaces: 1,
+                refineLandmarks: true,
+                minDetectionConfidence: 0.7,
+                minTrackingConfidence: 0.5
+            });
+            
+            faceMesh.onResults(onFaceMeshResults);
+        }
+        
+        let handResults = null;
+        let faceResults = null;
+        
+        function onHandsResults(results) {
+            handResults = results;
+            processResults();
+        }
+        
+        function onFaceMeshResults(results) {
+            faceResults = results;
+            processResults();
+        }
+        
+        // Hand connections for skeleton
+        const HAND_CONNECTIONS = [
+            [0, 1], [1, 2], [2, 3], [3, 4],  // Thumb
+            [0, 5], [5, 6], [6, 7], [7, 8],  // Index
+            [0, 9], [9, 10], [10, 11], [11, 12],  // Middle
+            [0, 13], [13, 14], [14, 15], [15, 16],  // Ring
+            [0, 17], [17, 18], [18, 19], [19, 20],  // Pinky
+            [5, 9], [9, 13], [13, 17]  // Palm
+        ];
+        
+        const FINGERTIPS = [4, 8, 12, 16, 20];
+        
+        function detectFist(landmarks) {
+            // Check if all fingertips are close to palm
+            const palmCenter = landmarks[0];
+            let closedFingers = 0;
+            
+            for (const tip of FINGERTIPS) {
+                const tipLandmark = landmarks[tip];
+                const dx = tipLandmark.x - palmCenter.x;
+                const dy = tipLandmark.y - palmCenter.y;
+                const dist = Math.sqrt(dx * dx + dy * dy);
+                
+                if (dist < 0.12) closedFingers++;
+            }
+            
+            return closedFingers >= 4;
+        }
+        
+        function processResults() {
+            targets = [];
+            
+            overlayCtx.clearRect(0, 0, overlayCanvas.width, overlayCanvas.height);
+            overlayCtx.save();
+            overlayCtx.scale(-1, 1);
+            overlayCtx.translate(-overlayCanvas.width, 0);
+            
+            let hasDetections = false;
+            
+            // Process hands
+            if (handResults && handResults.multiHandLandmarks) {
+                for (let i = 0; i < handResults.multiHandLandmarks.length; i++) {
+                    const landmarks = handResults.multiHandLandmarks[i];
+                    const handedness = handResults.multiHandedness[i].label;
+                    
+                    hasDetections = true;
+                    
+                    // Check for fist gesture
+                    const isFist = detectFist(landmarks);
+                    if (isFist && !lastFistState) {
+                        cycleTheme();
+                    }
+                    lastFistState = isFist;
+                    
+                    // Draw skeleton
+                    const color = handedness === 'Left' ? '#00ffff' : '#ff00ff';
+                    overlayCtx.strokeStyle = color;
+                    overlayCtx.lineWidth = 2;
+                    overlayCtx.shadowBlur = 10;
+                    overlayCtx.shadowColor = color;
+                    
+                    for (const [start, end] of HAND_CONNECTIONS) {
+                        const startLandmark = landmarks[start];
+                        const endLandmark = landmarks[end];
+                        
+                        overlayCtx.beginPath();
+                        overlayCtx.moveTo(startLandmark.x * overlayCanvas.width, startLandmark.y * overlayCanvas.height);
+                        overlayCtx.lineTo(endLandmark.x * overlayCanvas.width, endLandmark.y * overlayCanvas.height);
+                        overlayCtx.stroke();
+                    }
+                    
+                    // Draw landmarks with varying sizes
+                    for (let j = 0; j < landmarks.length; j++) {
+                        const landmark = landmarks[j];
+                        const x = landmark.x * overlayCanvas.width;
+                        const y = landmark.y * overlayCanvas.height;
+                        
+                        const isFingertip = FINGERTIPS.includes(j);
+                        const isWrist = j === 0;
+                        const size = (isFingertip || isWrist) ? 4 : 2;
+                        
+                        overlayCtx.fillStyle = color;
+                        overlayCtx.beginPath();
+                        overlayCtx.arc(x, y, size, 0, Math.PI * 2);
+                        overlayCtx.fill();
+                    }
+                    
+                    // Add landmarks as targets with spread control
+                    for (let j = 0; j < landmarks.length; j++) {
+                        const landmark = landmarks[j];
+                        const x = landmark.x * particleCanvas.width;
+                        const y = landmark.y * particleCanvas.height;
+                        
+                        let spread;
+                        if (FINGERTIPS.includes(j)) {
+                            spread = CONFIG.handSpreadFinger;
+                        } else if (j === 0 || j >= 5 && j % 4 === 1) {
+                            spread = CONFIG.handSpreadPalm;
+                        } else {
+                            spread = CONFIG.handSpreadBase;
+                        }
+                        
+                        // Add interpolated points along bones for smooth distribution
+                        if (j > 0) {
+                            const prevLandmark = landmarks[j - 1];
+                            const prevX = prevLandmark.x * particleCanvas.width;
+                            const prevY = prevLandmark.y * particleCanvas.height;
+                            const segments = Math.floor(Math.sqrt((x - prevX) ** 2 + (y - prevY) ** 2) / 10);
+                            
+                            for (let k = 0; k < segments; k++) {
+                                const t = k / segments;
+                                const phi = CONFIG.goldenRatio;
+                                const weight = Math.sin(t * Math.PI) * phi;
+                                
+                                targets.push({
+                                    x: prevX + (x - prevX) * t,
+                                    y: prevY + (y - prevY) * t,
+                                    spread: spread * weight
+                                });
+                            }
+                        }
+                        
+                        targets.push({ x, y, spread });
+                    }
+                }
+            }
+            
+            // Process face
+            if (faceResults && faceResults.multiFaceLandmarks && faceResults.multiFaceLandmarks.length > 0) {
+                const landmarks = faceResults.multiFaceLandmarks[0];
+                hasDetections = true;
+                
+                // Face mesh outlines
+                const FACE_OVAL = [10, 338, 297, 332, 284, 251, 389, 356, 454, 323, 361, 288, 397, 365, 379, 378, 400, 377, 152, 148, 176, 149, 150, 136, 172, 58, 132, 93, 234, 127, 162, 21, 54, 103, 67, 109];
+                const LEFT_EYE = [33, 246, 161, 160, 159, 158, 157, 173, 133, 155, 154, 153, 145, 144, 163, 7];
+                const RIGHT_EYE = [362, 398, 384, 385, 386, 387, 388, 466, 263, 249, 390, 373, 374, 380, 381, 382];
+                const LIPS = [61, 146, 91, 181, 84, 17, 314, 405, 321, 375, 291, 308, 324, 318, 402, 317, 14, 87, 178, 88, 95];
+                
+                // Draw face oval
+                overlayCtx.strokeStyle = '#00ffff';
+                overlayCtx.lineWidth = 1.5;
+                overlayCtx.shadowBlur = 8;
+                overlayCtx.shadowColor = '#00ffff';
+                overlayCtx.beginPath();
+                for (let i = 0; i < FACE_OVAL.length; i++) {
+                    const landmark = landmarks[FACE_OVAL[i]];
+                    const x = landmark.x * overlayCanvas.width;
+                    const y = landmark.y * overlayCanvas.height;
+                    if (i === 0) overlayCtx.moveTo(x, y);
+                    else overlayCtx.lineTo(x, y);
+                }
+                overlayCtx.closePath();
+                overlayCtx.stroke();
+                
+                // Draw eyes
+                overlayCtx.strokeStyle = '#00cccc';
+                for (const eyePoints of [LEFT_EYE, RIGHT_EYE]) {
+                    overlayCtx.beginPath();
+                    for (let i = 0; i < eyePoints.length; i++) {
+                        const landmark = landmarks[eyePoints[i]];
+                        const x = landmark.x * overlayCanvas.width;
+                        const y = landmark.y * overlayCanvas.height;
+                        if (i === 0) overlayCtx.moveTo(x, y);
+                        else overlayCtx.lineTo(x, y);
+                    }
+                    overlayCtx.closePath();
+                    overlayCtx.stroke();
+                }
+                
+                // Draw lips
+                overlayCtx.strokeStyle = '#ff00ff';
+                overlayCtx.shadowColor = '#ff00ff';
+                overlayCtx.beginPath();
+                for (let i = 0; i < LIPS.length; i++) {
+                    const landmark = landmarks[LIPS[i]];
+                    const x = landmark.x * overlayCanvas.width;
+                    const y = landmark.y * overlayCanvas.height;
+                    if (i === 0) overlayCtx.moveTo(x, y);
+                    else overlayCtx.lineTo(x, y);
+                }
+                overlayCtx.closePath();
+                overlayCtx.stroke();
+                
+                // Add all face landmarks as targets with tight clustering
+                for (const landmark of landmarks) {
+                    const x = landmark.x * particleCanvas.width;
+                    const y = landmark.y * particleCanvas.height;
+                    const z = landmark.z || 0;
+                    
+                    // Boost depth for certain features
+                    let depthBoost = 1;
+                    const idx = landmarks.indexOf(landmark);
+                    
+                    // Nose bridge and tip
+                    if ([1, 2, 4, 5, 6].includes(idx)) depthBoost = 1.5;
+                    // Cheekbones
+                    if ([50, 101, 119, 280, 330, 348].includes(idx)) depthBoost = 1.3;
+                    // Eye sockets
+                    if ([33, 133, 362, 263].includes(idx)) depthBoost = 0.7;
+                    
+                    targets.push({ 
+                        x, 
+                        y, 
+                        spread: CONFIG.faceSpread * depthBoost 
+                    });
+                }
+            }
+            
+            overlayCtx.restore();
+            
+            // Update status
+            if (hasDetections) {
+                statusMessage.textContent = 'Tracking Active';
+                statusDot.className = 'status-dot active';
+            } else {
+                statusMessage.textContent = 'Show your hands';
+                statusDot.className = 'status-dot waiting';
+            }
+        }
+        
+        // Animation loop
+        function animate() {
+            // Trail effect
+            particleCtx.fillStyle = `rgba(10, 10, 15, ${CONFIG.trailAlpha})`;
+            particleCtx.fillRect(0, 0, particleCanvas.width, particleCanvas.height);
+            
+            // Update and draw particles
+            for (const particle of particles) {
+                particle.update(targets);
+                particle.draw();
+            }
+            
+            requestAnimationFrame(animate);
+        }
+        
+        // Theme cycling
+        function cycleTheme() {
+            currentTheme = (currentTheme + 1) % THEMES.length;
+            
+            // Update particle colors
+            for (const particle of particles) {
+                particle.color = particle.getRandomColor();
+            }
+            
+            // Show theme name
+            themeIndicator.textContent = THEMES[currentTheme].name;
+            themeIndicator.classList.remove('show');
+            void themeIndicator.offsetWidth; // Trigger reflow
+            themeIndicator.classList.add('show');
+            
+            setTimeout(() => {
+                themeIndicator.classList.remove('show');
+            }, 1500);
+        }
+        
+        // Mode toggle
+        function toggleMode() {
+            mode = mode === 'attract' ? 'repel' : 'attract';
+            
+            if (mode === 'attract') {
+                attractBtn.classList.add('active');
+                repelBtn.classList.remove('active');
+            } else {
+                attractBtn.classList.remove('active');
+                repelBtn.classList.add('active');
+            }
+        }
+        
+        attractBtn.addEventListener('click', () => {
+            mode = 'attract';
+            attractBtn.classList.add('active');
+            repelBtn.classList.remove('active');
+        });
+        
+        repelBtn.addEventListener('click', () => {
+            mode = 'repel';
+            attractBtn.classList.remove('active');
+            repelBtn.classList.add('active');
+        });
+        
+        // Camera toggle
+        function toggleCamera() {
+            cameraVisible = !cameraVisible;
+            cameraPreview.style.display = cameraVisible ? 'block' : 'none';
+        }
+        
+        // Keyboard shortcuts
+        document.addEventListener('keydown', (e) => {
+            if (e.code === 'Space') {
+                e.preventDefault();
+                toggleMode();
+            } else if (e.key === 'v' || e.key === 'V') {
+                toggleCamera();
+            }
+        });
+        
+        // Camera setup
+        async function setupCamera() {
+            try {
+                const stream = await navigator.mediaDevices.getUserMedia({
+                    video: { width: 1280, height: 720 }
+                });
+                
+                cameraVideo.srcObject = stream;
+                
+                // Wait for video to load
+                await new Promise((resolve) => {
+                    cameraVideo.onloadedmetadata = () => {
+                        overlayCanvas.width = cameraVideo.videoWidth;
+                        overlayCanvas.height = cameraVideo.videoHeight;
+                        resolve();
+                    };
+                });
+                
+                return true;
+            } catch (error) {
+                console.error('Camera access error:', error);
+                statusMessage.textContent = 'Camera access denied';
+                statusDot.className = 'status-dot waiting';
+                return false;
+            }
+        }
+        
+        // Start application
+        async function start() {
+            introScreen.classList.add('hidden');
+            app.classList.add('visible');
+            
+            statusMessage.textContent = 'Loading models...';
+            
+            // Initialize MediaPipe
+            initHands();
+            initFaceMesh();
+            
+            // Setup camera
+            const cameraReady = await setupCamera();
+            
+            if (cameraReady) {
+                // Initialize particles
+                initParticles();
+                attractBtn.classList.add('active');
+                
+                // Start animation
+                animate();
+                
+                // Process video frames
+                const camera = new Camera(cameraVideo, {
+                    onFrame: async () => {
+                        await hands.send({ image: cameraVideo });
+                        await faceMesh.send({ image: cameraVideo });
+                    },
+                    width: 1280,
+                    height: 720
+                });
+                
+                camera.start();
+                
+                statusMessage.textContent = 'Ready';
+                statusDot.className = 'status-dot active';
+            }
+        }
+        
+        enableCameraBtn.addEventListener('click', start);
+    </script>
+</body>
+</html>
